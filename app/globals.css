@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@theme {
+  --color-green: #2a5c4a;
+  --color-green-dark: #1e4536;
+  --color-yellow: #f8dc55;
+  --color-butter: #fff79f;
+  --color-orange: #e8732a;
+  --color-orange-ink: #b84e0c;
+  --color-cream: #fbf7f0;
+  --color-cream-2: #f3ecdd;
+  --color-admin: #f6f1e6;
+  --color-ink: #1b2b25;
+  --color-muted: #5e7068;
+  --color-blue: #3f6fe0;
+  --color-line: #e6ddca;
+  --color-green-soft: #3b6b55;
+  /* Slightly darker variants for small text on tinted backgrounds (contrast 4.5:1 or better). */
+  --color-muted-strong: #4a5c54;
+  --color-orange-ink-strong: #9a4209;
+  --color-peach: #fbddd0;
+  --color-periwinkle: #dde6fa;
+  --color-sun: #faf0a0;
+
+  --color-status-confirmed: #bfe3d0;
+  --color-status-confirmed-ink: #14382a;
+  --color-status-pending: #fff79f;
+  --color-status-pending-ink: #4a3f00;
+  --color-status-service: #f5b58b;
+  --color-status-service-ink: #4a1d04;
+  --color-status-done: #e6e0d0;
+  --color-status-done-ink: #3a3626;
+  --color-status-cancelled: #fbe0d4;
+  --color-status-cancelled-ink: #7a3306;
+
+  --font-display: var(--font-bagel), "Arial Black", sans-serif;
+  --font-sans: var(--font-dm-sans), system-ui, sans-serif;
+
+  --radius-card: 32px;
+  --radius-card-lg: 40px;
+  --radius-input: 18px;
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--color-cream);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-cream);
+  color: var(--color-ink);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-orange);
+  outline-offset: 2px;
+}
+
+/* Orange is too faint on dark green, so keyboard focus turns yellow inside dark areas. */
+.on-dark :focus-visible,
+.on-dark:focus-visible {
+  outline-color: var(--color-yellow);
+}
+
+/* A light card inside a dark area goes back to orange. */
+.on-dark .on-light :focus-visible {
+  outline-color: var(--color-orange);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
