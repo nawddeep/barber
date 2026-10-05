@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { Button, Flower, Input, Label, Logo } from "@/components/ui";
-import { adminLogin, ApiError, DEMO_LOGINS } from "@/lib/api";
+import { DEMO_LOGINS } from "@/lib/api";
 import { setSession, useSession } from "@/lib/auth-session";
+import { supabase } from "@/src/supabaseClient";
 
 type Values = { email: string; password: string };
 
@@ -26,6 +28,16 @@ export function LoginForm() {
     return n && n.startsWith("/admin") && !n.startsWith("//") ? n : "/admin";
   })();
 
+  const registeredEmail = params.get("email");
+  const isRegistered = params.get("registered") === "true";
+
+  // Pre-fill email if redirected from Sign Up
+  useEffect(() => {
+    if (registeredEmail) {
+      setValue("email", registeredEmail);
+    }
+  }, [registeredEmail, setValue]);
+
   // Already signed in: go straight to the panel.
   useEffect(() => {
     if (session) router.replace(next);
@@ -34,10 +46,34 @@ export function LoginForm() {
   const onSubmit = async (v: Values) => {
     setError(null);
     try {
-      setSession(await adminLogin(v));
-      router.replace(next);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Could not sign in. Please try again.");
+      const { data, error: sbError } = await supabase.auth.signInWithPassword({
+        email: v.email.trim(),
+        password: v.password,
+      });
+
+      if (sbError) {
+        setError(sbError.message);
+        return;
+      }
+
+      if (data.session) {
+        const user = data.user;
+        const role =
+          (user.user_metadata?.role as "OWNER" | "STAFF") ||
+          (user.email?.includes("staff") ? "STAFF" : "OWNER");
+        const name =
+          user.user_metadata?.name ||
+          (role === "OWNER" ? "Salon owner" : "Front desk");
+
+        setSession({
+          email: user.email || v.email,
+          name,
+          role,
+        });
+        router.replace(next);
+      }
+    } catch {
+      setError("Could not sign in. Please try again.");
     }
   };
 
@@ -53,11 +89,18 @@ export function LoginForm() {
         <div className="on-light rounded-[40px] bg-cream p-7 shadow-[0_30px_60px_-30px_rgba(0,0,0,0.5)] sm:p-9">
           <div className="flex items-center justify-between gap-3">
             <h1 className="font-display text-3xl text-green">Sign in</h1>
-            <span className="rounded-full bg-yellow px-3 py-1 text-xs font-bold uppercase tracking-wider text-green-dark">Demo only</span>
+            <span className="rounded-full bg-yellow px-3 py-1 text-xs font-bold uppercase tracking-wider text-green-dark">Supabase Auth</span>
           </div>
 
-          <div className="mt-4 rounded-3xl bg-butter p-4 text-sm text-ink">
-            <p className="font-bold">Demo logins (nothing here is real)</p>
+          {/* Success banner when redirected from Sign Up */}
+          {isRegistered && (
+            <div className="mt-4 rounded-2xl bg-butter p-3.5 text-sm font-medium text-ink shadow-sm" role="status">
+              Your account has been created. You can now sign in.
+            </div>
+          )}
+
+          <div className="mt-4 rounded-3xl bg-butter/60 p-4 text-sm text-ink">
+            <p className="font-bold">Demo logins</p>
             <ul className="mt-2 space-y-2">
               {DEMO_LOGINS.map((d) => (
                 <li key={d.email} className="flex flex-wrap items-center justify-between gap-2">
@@ -79,17 +122,55 @@ export function LoginForm() {
           <form noValidate onSubmit={handleSubmit(onSubmit)} className="mt-5 space-y-4" aria-label="Sign in">
             <div>
               <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" autoComplete="username" invalid={!!errors.email} aria-describedby="email-err" {...register("email", { required: "Enter your email", validate: (v) => EMAIL.test(v.trim()) || "Enter a valid email" })} />
-              {errors.email && <p id="email-err" role="alert" className="mt-1 text-sm font-medium text-orange-ink">{errors.email.message}</p>}
+              <Input
+                id="email"
+                type="email"
+                autoComplete="username"
+                invalid={!!errors.email}
+                aria-describedby="email-err"
+                {...register("email", {
+                  required: "Enter your email",
+                  validate: (v) => EMAIL.test(v.trim()) || "Enter a valid email",
+                })}
+              />
+              {errors.email && (
+                <p id="email-err" role="alert" className="mt-1 text-sm font-medium text-orange-ink">
+                  {errors.email.message}
+                </p>
+              )}
             </div>
             <div>
               <Label htmlFor="password">Password</Label>
-              <Input id="password" type="password" autoComplete="current-password" invalid={!!errors.password} aria-describedby="pw-err" {...register("password", { required: "Enter your password" })} />
-              {errors.password && <p id="pw-err" role="alert" className="mt-1 text-sm font-medium text-orange-ink">{errors.password.message}</p>}
+              <Input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                invalid={!!errors.password}
+                aria-describedby="pw-err"
+                {...register("password", { required: "Enter your password" })}
+              />
+              {errors.password && (
+                <p id="pw-err" role="alert" className="mt-1 text-sm font-medium text-orange-ink">
+                  {errors.password.message}
+                </p>
+              )}
             </div>
-            {error && <p role="alert" className="rounded-2xl bg-status-cancelled p-3 text-sm font-bold text-status-cancelled-ink">{error}</p>}
-            <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>{isSubmitting ? "Signing in…" : "Sign in"}</Button>
+            {error && (
+              <p role="alert" className="rounded-2xl bg-status-cancelled p-3 text-sm font-bold text-status-cancelled-ink">
+                {error}
+              </p>
+            )}
+            <Button type="submit" size="lg" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? "Signing in…" : "Sign in"}
+            </Button>
           </form>
+
+          <div className="mt-6 text-center text-sm text-ink/80">
+            <span>Don&apos;t have an account? </span>
+            <Link href="/signup" className="font-bold text-green underline hover:text-green-dark">
+              Sign up
+            </Link>
+          </div>
         </div>
       </div>
     </main>

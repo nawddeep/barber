@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import type { AdminSession } from "./api/session";
+import { supabase } from "@/src/supabaseClient";
 
-// MOCK: a real app would use an HTTP-only session cookie. This one lives in localStorage.
 const KEY = "barbr-admin-session";
 const listeners = new Set<() => void>();
 
@@ -38,7 +38,7 @@ export function clearSession() {
 
 function subscribe(cb: () => void) {
   listeners.add(cb);
-  const onStorage = (e: StorageEvent) => e.key === KEY && cb(); // other tabs
+  const onStorage = (e: StorageEvent) => e.key === KEY && cb();
   window.addEventListener("storage", onStorage);
   return () => {
     listeners.delete(cb);
@@ -46,17 +46,77 @@ function subscribe(cb: () => void) {
   };
 }
 
-/** The current admin session. `ready` is false until the browser has read localStorage. */
+/** The current admin session. `ready` is false until Supabase Auth session has been checked. */
 export function useSession(): { session: AdminSession | null; ready: boolean } {
-  const value = useSyncExternalStore(subscribe, raw, () => undefined);
-  return useMemo(() => {
-    if (value === undefined) return { session: null, ready: false };
-    try {
-      return { session: value ? (JSON.parse(value) as AdminSession) : null, ready: true };
-    } catch {
-      return { session: null, ready: true };
+  const localValue = useSyncExternalStore(subscribe, raw, () => undefined);
+  const [supabaseReady, setSupabaseReady] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function checkSupabaseSession() {
+      try {
+        const { data: { session: sbSession } } = await supabase.auth.getSession();
+        if (!mounted) return;
+        if (sbSession) {
+          const user = sbSession.user;
+          const role =
+            (user.user_metadata?.role as "OWNER" | "STAFF") ||
+            (user.email?.includes("staff") ? "STAFF" : "OWNER");
+          const name =
+            user.user_metadata?.name ||
+            (role === "OWNER" ? "Salon owner" : "Front desk");
+          setSession({
+            email: user.email ?? "",
+            name,
+            role,
+          });
+        } else {
+          clearSession();
+        }
+      } catch {
+        // Fallback to local
+      } finally {
+        if (mounted) setSupabaseReady(true);
+      }
     }
-  }, [value]);
+
+    checkSupabaseSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, sbSession) => {
+      if (!sbSession) {
+        clearSession();
+      } else {
+        const user = sbSession.user;
+        const role =
+          (user.user_metadata?.role as "OWNER" | "STAFF") ||
+          (user.email?.includes("staff") ? "STAFF" : "OWNER");
+        const name =
+          user.user_metadata?.name ||
+          (role === "OWNER" ? "Salon owner" : "Front desk");
+        setSession({
+          email: user.email ?? "",
+          name,
+          role,
+        });
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  return useMemo(() => {
+    if (localValue === undefined && !supabaseReady) return { session: null, ready: false };
+    try {
+      const parsed = localValue ? (JSON.parse(localValue) as AdminSession) : null;
+      return { session: parsed, ready: supabaseReady };
+    } catch {
+      return { session: null, ready: supabaseReady };
+    }
+  }, [localValue, supabaseReady]);
 }
 
 /** Pages only OWNER may open. */

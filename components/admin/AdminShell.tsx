@@ -51,7 +51,13 @@ function SidebarContent({ session, pathname, onNavigate, onReset }: { session: A
           </button>
           <button
             type="button"
-            onClick={() => {
+            onClick={async () => {
+              try {
+                const { supabase } = await import("@/src/supabaseClient");
+                await supabase.auth.signOut();
+              } catch {
+                // Ignore signOut network failure
+              }
               clearSession();
               onNavigate?.();
               router.replace("/admin/login");
